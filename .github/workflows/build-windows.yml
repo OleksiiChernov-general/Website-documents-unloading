@@ -24,6 +24,13 @@ jobs:
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
+      - name: List repository files
+        shell: pwsh
+        run: |
+          Get-ChildItem -Force
+          Write-Host "Current directory:"
+          Get-Location
+
       - name: Install project dependencies
         run: python -m pip install -r requirements.txt
 
