@@ -1,0 +1,55 @@
+name: Build Windows portable executable
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Show Python version
+        run: python --version
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install project dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Install PyInstaller
+        run: python -m pip install pyinstaller
+
+      - name: Install Playwright Chromium
+        shell: pwsh
+        run: |
+          $env:PLAYWRIGHT_BROWSERS_PATH="0"
+          python -m playwright install chromium
+
+      - name: Build with PyInstaller
+        shell: pwsh
+        run: |
+          $env:PLAYWRIGHT_BROWSERS_PATH="0"
+          pyinstaller --noconfirm --clean site_document_unloader.spec
+
+      - name: Archive portable build
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist\site_document_unloader\*" -DestinationPath "site_document_unloader_windows.zip" -Force
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site_document_unloader_windows
+          path: site_document_unloader_windows.zip
+          retention-days: 14
