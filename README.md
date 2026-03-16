@@ -278,3 +278,4 @@ When `group_by_domain: false`, the previous flat directory behavior is used.
 - Browser network interception helps with many JavaScript-driven downloads, but not every blob-based flow exposes a reusable response body.
 - Very dynamic sites can still hide documents behind custom UI states that are not reachable through safe generic clicks.
 - The crawler intentionally avoids aggressive URL normalization and does not remove query parameters, because signed URLs often depend on them.
+Build trigger
