@@ -1,0 +1,19 @@
+headless: true
+timeout_ms: 30000
+wait_until: networkidle
+max_depth: 2
+max_pages_per_domain: 50
+follow_subdomains: false
+allowed_extensions:
+  - .pdf
+  - .xls
+  - .xlsx
+  - .csv
+  - .doc
+  - .docx
+  - .zip
+download_directory: ./downloads
+state_file: ./state/download-state.json
+log_file: ./logs/downloader.log
+urls:
+  - https://example.com
