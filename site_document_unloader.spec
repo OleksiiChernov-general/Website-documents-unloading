@@ -3,7 +3,7 @@
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-project_root = Path(__file__).resolve().parent
+project_root = Path(SPECPATH)
 
 datas = []
 binaries = []
