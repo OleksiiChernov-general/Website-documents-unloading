@@ -12,11 +12,12 @@ hiddenimports = []
 datas += collect_data_files("playwright")
 hiddenimports += collect_submodules("playwright")
 hiddenimports += collect_submodules("yaml")
+hiddenimports += collect_submodules("site_document_unloader")
 
 config_example = project_root / "config.example.yaml"
 start_bat = project_root / "start.bat"
 runtime_hook = project_root / "pyinstaller_runtime_hook.py"
-main_script = project_root / "site_document_unloader" / "__main__.py"
+launcher_script = project_root / "run_site_document_unloader.py"
 
 if config_example.exists():
     datas.append((str(config_example), "."))
@@ -29,7 +30,7 @@ if runtime_hook.exists():
     runtime_hooks.append(str(runtime_hook))
 
 a = Analysis(
-    [str(main_script)],
+    [str(launcher_script)],
     pathex=[str(project_root)],
     binaries=binaries,
     datas=datas,
