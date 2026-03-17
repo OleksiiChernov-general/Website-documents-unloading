@@ -12,15 +12,7 @@ hiddenimports = []
 datas += collect_data_files("playwright")
 hiddenimports += collect_submodules("playwright")
 hiddenimports += collect_submodules("yaml")
-
-# Явно перечисляем пакет проекта
-hiddenimports += [
-    "site_document_unloader",
-    "site_document_unloader.cli",
-    "site_document_unloader.config",
-    "site_document_unloader.crawler",
-    "site_document_unloader.state",
-]
+hiddenimports += collect_submodules("site_document_unloader")
 
 config_example = project_root / "config.example.yaml"
 start_bat = project_root / "start.bat"
