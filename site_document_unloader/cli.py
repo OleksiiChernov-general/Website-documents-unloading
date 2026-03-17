@@ -1,29 +1,48 @@
+from __future__ import annotations
+
 import argparse
-import yaml
-from playwright.sync_api import sync_playwright
+import logging
+from pathlib import Path
+
+from site_document_unloader.config import load_config
+from site_document_unloader.crawler import DocumentCrawler
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required=True)
+def _setup_logging(log_file: Path) -> None:
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        handlers=[
+            logging.FileHandler(log_file, encoding="utf-8"),
+            logging.StreamHandler(),
+        ],
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Find and download documents from websites."
+    )
+    parser.add_argument(
+        "--config",
+        required=True,
+        help="Path to YAML config file.",
+    )
     args = parser.parse_args()
 
-    print("🚀 Запуск site_document_unloader")
-    print(f"Config file: {args.config}")
+    config = load_config(args.config)
+    _setup_logging(config.log_file)
 
-    # читаем конфиг
-    with open(args.config, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+    logging.getLogger(__name__).info("Starting site_document_unloader")
+    logging.getLogger(__name__).info("Using config: %s", args.config)
 
-    print("✅ Конфиг загружен:")
-    print(config)
+    crawler = DocumentCrawler(config)
+    crawler.run()
 
-    # тестовый запуск playwright
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto("https://example.com")
-        print("🌐 Страница открыта:", page.title())
-        browser.close()
+    logging.getLogger(__name__).info("site_document_unloader finished successfully")
 
-    print("🎉 Готово!")
+
+if __name__ == "__main__":
+    main()
