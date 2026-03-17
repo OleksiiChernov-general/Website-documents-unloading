@@ -294,7 +294,7 @@ class DocumentCrawler:
             if document_url in page_network_seen:
                 return
 
-            headers = response.all_headers()
+            headers = _response_headers(response)
             if not self._is_document_response_candidate(document_url, headers):
                 return
 
@@ -326,7 +326,7 @@ class DocumentCrawler:
         LOGGER.info("download_attempt page_url=%s document_url=%s discovery_method=%s", page_url, normalized_url, discovery_method)
         try:
             response = context.request.get(normalized_url, timeout=self.config.timeout_ms)
-            headers = response.all_headers()
+            headers = _response_headers(response)
             content_length = _parse_content_length(headers)
             if content_length is not None and content_length > self._max_file_size_bytes:
                 self._log_document_event(
@@ -378,7 +378,7 @@ class DocumentCrawler:
             )
             return
 
-        headers = response.all_headers()
+        headers = _response_headers(response)
         content_length = _parse_content_length(headers)
         if content_length is not None and content_length > self._max_file_size_bytes:
             self._log_document_event(
@@ -726,6 +726,26 @@ def _parse_content_length(headers: dict[str, str]) -> int | None:
 
 def _content_type(headers: dict[str, str]) -> str:
     return (headers.get("content-type") or "").split(";", 1)[0].strip().lower()
+
+
+def _response_headers(response: object) -> dict[str, str]:
+    all_headers = getattr(response, "all_headers", None)
+    if callable(all_headers):
+        return _normalize_headers(all_headers())
+
+    headers_attr = getattr(response, "headers", None)
+    if callable(headers_attr):
+        return _normalize_headers(headers_attr())
+    if headers_attr is not None:
+        return _normalize_headers(headers_attr)
+
+    return {}
+
+
+def _normalize_headers(headers: object) -> dict[str, str]:
+    if not isinstance(headers, dict):
+        return {}
+    return {str(key).lower(): str(value) for key, value in headers.items()}
 
 
 def _looks_like_html(body: bytes) -> bool:
