@@ -146,6 +146,8 @@ class DocumentCrawler:
         self._section_keywords = tuple(_normalize_match_text(value) for value in config.section_keywords)
         self._positive_url_patterns = tuple(_normalize_match_text(value) for value in config.positive_url_patterns)
         self._negative_url_patterns = tuple(_normalize_match_text(value) for value in config.negative_url_patterns)
+        self._blocked_extensions = tuple(_normalize_match_text(value) for value in config.blocked_extensions)
+        self._blocked_content_types = tuple(_normalize_match_text(value) for value in config.blocked_content_types)
         self._language_switcher_hints = tuple(_normalize_match_text(value) for value in config.language_switcher_hints)
         self._product_page_hints = tuple(_normalize_match_text(value) for value in config.product_page_hints)
         self._queue_counter = 0
@@ -446,6 +448,20 @@ class DocumentCrawler:
             in_document_context = self._looks_document_related_text(f"{label} {section_text}")
             for candidate_url in _extract_urls_from_text(value, page_url):
                 normalized = _normalize_url(candidate_url)
+                blocked_reason = self._blocked_extension_reason(normalized)
+                if blocked_reason:
+                    self._log_document_event(
+                        page_url=page_url,
+                        document_url=normalized,
+                        internal_id=source_id,
+                        filename="",
+                        discovery_method="dom_link",
+                        language_context=language_context,
+                        download_strategy="",
+                        result="skipped",
+                        reason=blocked_reason,
+                    )
+                    continue
                 if not self._looks_document_candidate_url(normalized, label, section_text):
                     continue
                 existing = candidates.get(normalized)
@@ -500,7 +516,19 @@ class DocumentCrawler:
                     depth=0,
                     language_context="",
                     result="rejected",
-                    reason="negative_url_pattern",
+                    reason=self._negative_url_reason(href),
+                )
+                continue
+            blocked_reason = self._blocked_extension_reason(href)
+            if blocked_reason:
+                self._log_queue_event(
+                    source_page=page_url,
+                    target_url=href,
+                    score=-100,
+                    depth=0,
+                    language_context="",
+                    result="rejected",
+                    reason=blocked_reason,
                 )
                 continue
 
@@ -516,7 +544,7 @@ class DocumentCrawler:
                 continue
 
             score = self._score_link_candidate(href, label)
-            if score < -5:
+            if score <= 0:
                 self._log_queue_event(
                     source_page=page_url,
                     target_url=href,
@@ -524,7 +552,7 @@ class DocumentCrawler:
                     depth=0,
                     language_context="",
                     result="rejected",
-                    reason="low_priority",
+                    reason="skipped_navigation_page",
                 )
                 continue
 
@@ -583,6 +611,8 @@ class DocumentCrawler:
             href = _normalize_url(urljoin(page_url, str(entry.get("href", ""))))
             text = str(entry.get("text", ""))
             if not href or not self._is_allowed_domain(base_netloc, href):
+                continue
+            if self._is_negative_link(href) or self._blocked_extension_reason(href):
                 continue
             if _language_variant_signature(href) != current_signature:
                 continue
@@ -799,6 +829,34 @@ class DocumentCrawler:
         runtime: PageRuntimeState,
     ) -> None:
         normalized_url = _normalize_url(candidate.url)
+        negative_reason = self._negative_url_reason(normalized_url)
+        if negative_reason:
+            self._log_document_event(
+                page_url=page_url,
+                document_url=normalized_url,
+                internal_id=candidate.source_id,
+                filename="",
+                discovery_method=candidate.discovery_method,
+                language_context=language_context,
+                download_strategy="",
+                result="skipped",
+                reason=negative_reason,
+            )
+            return
+        blocked_reason = self._blocked_extension_reason(normalized_url)
+        if blocked_reason:
+            self._log_document_event(
+                page_url=page_url,
+                document_url=normalized_url,
+                internal_id=candidate.source_id,
+                filename="",
+                discovery_method=candidate.discovery_method,
+                language_context=language_context,
+                download_strategy="",
+                result="skipped",
+                reason=blocked_reason,
+            )
+            return
         if self.state.has_url(normalized_url):
             self._log_document_event(
                 page_url=page_url,
@@ -989,7 +1047,38 @@ class DocumentCrawler:
                 return
             headers = _response_headers(response)
             in_document_context = document_url in runtime.document_context_urls or runtime.recent_document_interaction
+            blocked_extension_reason = self._blocked_extension_reason(document_url, _resolve_filename(document_url, headers))
+            blocked_content_reason = self._blocked_content_type_reason(_content_type(headers))
+            negative_reason = self._negative_url_reason(document_url)
+            if blocked_extension_reason or blocked_content_reason or negative_reason:
+                if in_document_context:
+                    self._log_document_event(
+                        page_url=runtime.page_url,
+                        document_url=document_url,
+                        internal_id="network_response",
+                        filename="",
+                        discovery_method="network_response",
+                        language_context=runtime.language_context,
+                        download_strategy="network_capture",
+                        result="skipped",
+                        reason=blocked_extension_reason or blocked_content_reason or negative_reason or "skipped_non_document_asset",
+                        content_type=_content_type(headers),
+                    )
+                return
             if not self._is_document_response_candidate(document_url, headers, in_document_context):
+                if in_document_context:
+                    self._log_document_event(
+                        page_url=runtime.page_url,
+                        document_url=document_url,
+                        internal_id="network_response",
+                        filename="",
+                        discovery_method="network_response",
+                        language_context=runtime.language_context,
+                        download_strategy="network_capture",
+                        result="skipped",
+                        reason="not_document_like",
+                        content_type=_content_type(headers),
+                    )
                 return
             runtime.page_network_seen.add(document_url)
             self._save_response_body(
@@ -1270,15 +1359,28 @@ class DocumentCrawler:
         content_type: str,
         in_document_context: bool,
     ) -> str | None:
+        blocked_extension_reason = self._blocked_extension_reason(url, filename)
+        if blocked_extension_reason:
+            return blocked_extension_reason
         if not body:
             return "rejected_empty_body"
         if len(body) > self._max_file_size_bytes:
             return "rejected_size_limit"
         if _looks_like_html(body):
             return "rejected_html_response"
+        blocked_content_reason = self._blocked_content_type_reason(content_type)
+        if blocked_content_reason:
+            return blocked_content_reason
         if TEXTUAL_REJECTION_CONTENT_TYPE_RE.match(content_type):
             return "rejected_content_type"
         if content_type and not self._is_allowed_content_type(url, filename, headers, content_type, in_document_context):
+            return "not_document_like"
+        if self.config.documents_only and not (
+            self._is_document_url(url)
+            or self._looks_like_document_name(url, filename)
+            or "attachment" in (headers.get("content-disposition") or "").lower()
+            or (content_type and self._is_allowed_content_type(url, filename, headers, content_type, in_document_context))
+        ):
             return "not_document_like"
         return None
 
@@ -1309,6 +1411,10 @@ class DocumentCrawler:
         content_disposition = (headers.get("content-disposition") or "").lower()
         content_type = _content_type(headers)
         filename = _resolve_filename(url, headers)
+        if self._blocked_extension_reason(url, filename):
+            return False
+        if self._blocked_content_type_reason(content_type):
+            return False
         if "attachment" in content_disposition or DOCUMENT_CONTENT_TYPE_RE.match(content_type):
             return True
         if GENERIC_BINARY_CONTENT_TYPE_RE.match(content_type):
@@ -1322,6 +1428,8 @@ class DocumentCrawler:
         return any(extension in text for extension in self.config.allowed_extensions)
 
     def _looks_document_candidate_url(self, url: str, label: str, section_text: str) -> bool:
+        if self._blocked_extension_reason(url) or self._negative_url_reason(url):
+            return False
         if self._is_document_url(url):
             return True
         if self._looks_document_related_text(f"{label} {section_text}"):
@@ -1341,6 +1449,10 @@ class DocumentCrawler:
         normalized_url = _normalize_match_text(url)
         normalized_label = _normalize_match_text(label)
         score = 0
+        if self._blocked_extension_reason(url):
+            return -100
+        if self._negative_url_reason(url):
+            return -100
         score += _count_keyword_hits(normalized_url, self._positive_url_patterns) * 6
         score += _count_keyword_hits(normalized_label, self._document_keywords) * 5
         score += _count_keyword_hits(normalized_label, self._section_keywords) * 4
@@ -1423,8 +1535,13 @@ class DocumentCrawler:
         if not self._is_allowed_domain(base_netloc, normalized):
             self._log_queue_event(source_page=source_page, target_url=normalized, score=target.score, depth=target.depth, language_context=target.language_context, result="rejected", reason="outside_domain")
             return
-        if self._is_negative_link(normalized):
-            self._log_queue_event(source_page=source_page, target_url=normalized, score=target.score, depth=target.depth, language_context=target.language_context, result="rejected", reason="negative_url_pattern")
+        negative_reason = self._negative_url_reason(normalized)
+        if negative_reason:
+            self._log_queue_event(source_page=source_page, target_url=normalized, score=target.score, depth=target.depth, language_context=target.language_context, result="rejected", reason=negative_reason)
+            return
+        blocked_reason = self._blocked_extension_reason(normalized)
+        if blocked_reason:
+            self._log_queue_event(source_page=source_page, target_url=normalized, score=target.score, depth=target.depth, language_context=target.language_context, result="rejected", reason=blocked_reason)
             return
         queued.add(normalized)
         self._queue_counter += 1
@@ -1448,8 +1565,44 @@ class DocumentCrawler:
         return False
 
     def _is_negative_link(self, url: str) -> bool:
+        return self._negative_url_reason(url) is not None
+
+    def _negative_url_reason(self, url: str) -> str | None:
         normalized = _normalize_match_text(url)
-        return any(pattern in normalized for pattern in self._negative_url_patterns) or normalized.startswith("#")
+        if normalized.startswith("#"):
+            return "skipped_navigation_page"
+        if "/producttags/" in normalized or "/tags/" in normalized:
+            return "skipped_tag_page"
+        for pattern in self._negative_url_patterns:
+            if pattern in normalized:
+                if any(token in pattern for token in ("/news", "/blog", "/contact", "/search", "privacy", "terms", "cookie")):
+                    return "skipped_navigation_page"
+                return "blocked_negative_url_pattern"
+        return None
+
+    def _blocked_extension_reason(self, url: str, filename: str = "") -> str | None:
+        parsed = urlsplit(url)
+        values = [parsed.path.lower(), filename.lower()]
+        for query_values in parse_qs(parsed.query).values():
+            values.extend(str(item).lower() for item in query_values)
+        for value in values:
+            if any(value.endswith(extension) for extension in self._blocked_extensions):
+                return "blocked_extension"
+        normalized = _normalize_match_text(f"{url} {filename}")
+        if "favicon" in normalized or "thumbnail" in normalized or "thumb" in normalized:
+            return "skipped_non_document_asset"
+        return None
+
+    def _blocked_content_type_reason(self, content_type: str) -> str | None:
+        normalized = _normalize_match_text(content_type)
+        for blocked in self._blocked_content_types:
+            if not blocked:
+                continue
+            if blocked.endswith("/") and normalized.startswith(blocked):
+                return "blocked_content_type"
+            if normalized == blocked:
+                return "blocked_content_type"
+        return None
 
     def _settle_after_click(self, page: Page) -> None:
         try:

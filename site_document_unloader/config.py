@@ -167,6 +167,12 @@ DEFAULT_NEGATIVE_URL_PATTERNS = (
     "wishlist",
     "compare",
     "search",
+    "/search",
+    "/contact",
+    "/news",
+    "/blog",
+    "/tags/",
+    "/producttags/",
     "mailto:",
     "tel:",
     "javascript:",
@@ -179,6 +185,48 @@ DEFAULT_NEGATIVE_URL_PATTERNS = (
     "t.me",
     "wa.me",
     "whatsapp",
+)
+
+DEFAULT_BLOCKED_EXTENSIONS = (
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".webp",
+    ".gif",
+    ".svg",
+    ".ico",
+    ".bmp",
+    ".js",
+    ".css",
+    ".map",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".otf",
+    ".eot",
+    ".mp3",
+    ".wav",
+    ".ogg",
+    ".m4a",
+    ".mp4",
+    ".webm",
+    ".avi",
+    ".mov",
+    ".m4v",
+)
+
+DEFAULT_BLOCKED_CONTENT_TYPES = (
+    "text/html",
+    "image/",
+    "text/css",
+    "application/javascript",
+    "text/javascript",
+    "application/x-javascript",
+    "font/",
+    "application/font",
+    "application/vnd.ms-fontobject",
+    "audio/",
+    "video/",
 )
 
 DEFAULT_LANGUAGE_SWITCHER_HINTS = (
@@ -239,6 +287,7 @@ class AppConfig:
     max_depth: int = 2
     max_pages_per_domain: int = 50
     follow_subdomains: bool = False
+    documents_only: bool = True
     max_file_size_mb: int = 100
     group_by_domain: bool = True
     save_state_every_n_files: int | None = 20
@@ -247,7 +296,7 @@ class AppConfig:
     max_language_variants_per_page: int = 2
     document_page_bonus_clicks: int = 8
     document_page_bonus_depth: int = 1
-    max_links_enqueued_per_page: int = 40
+    max_links_enqueued_per_page: int = 20
     network_capture_enabled: bool = True
     post_click_rescan: bool = True
     allowed_extensions: tuple[str, ...] = (
@@ -259,6 +308,8 @@ class AppConfig:
         ".docx",
         ".zip",
     )
+    blocked_extensions: tuple[str, ...] = DEFAULT_BLOCKED_EXTENSIONS
+    blocked_content_types: tuple[str, ...] = DEFAULT_BLOCKED_CONTENT_TYPES
     document_keywords: tuple[str, ...] = DEFAULT_DOCUMENT_KEYWORDS
     section_keywords: tuple[str, ...] = DEFAULT_SECTION_KEYWORDS
     positive_url_patterns: tuple[str, ...] = DEFAULT_POSITIVE_URL_PATTERNS
@@ -300,6 +351,7 @@ def load_config(config_path: str | Path) -> AppConfig:
         max_depth=int(raw.get("max_depth", 2)),
         max_pages_per_domain=int(raw.get("max_pages_per_domain", 50)),
         follow_subdomains=bool(raw.get("follow_subdomains", False)),
+        documents_only=bool(raw.get("documents_only", True)),
         max_file_size_mb=int(raw.get("max_file_size_mb", 100)),
         group_by_domain=bool(raw.get("group_by_domain", True)),
         save_state_every_n_files=_optional_int(raw.get("save_state_every_n_files", 20)),
@@ -308,10 +360,14 @@ def load_config(config_path: str | Path) -> AppConfig:
         max_language_variants_per_page=int(raw.get("max_language_variants_per_page", 2)),
         document_page_bonus_clicks=int(raw.get("document_page_bonus_clicks", 8)),
         document_page_bonus_depth=int(raw.get("document_page_bonus_depth", 1)),
-        max_links_enqueued_per_page=int(raw.get("max_links_enqueued_per_page", 40)),
+        max_links_enqueued_per_page=int(raw.get("max_links_enqueued_per_page", 20)),
         network_capture_enabled=bool(raw.get("network_capture_enabled", True)),
         post_click_rescan=bool(raw.get("post_click_rescan", True)),
         allowed_extensions=allowed_extensions,
+        blocked_extensions=tuple(
+            _normalize_extension(item) for item in raw.get("blocked_extensions", DEFAULT_BLOCKED_EXTENSIONS)
+        ),
+        blocked_content_types=_tuple_from_config(raw.get("blocked_content_types"), DEFAULT_BLOCKED_CONTENT_TYPES),
         document_keywords=_tuple_from_config(raw.get("document_keywords"), DEFAULT_DOCUMENT_KEYWORDS),
         section_keywords=_tuple_from_config(raw.get("section_keywords"), DEFAULT_SECTION_KEYWORDS),
         positive_url_patterns=_tuple_from_config(raw.get("positive_url_patterns"), DEFAULT_POSITIVE_URL_PATTERNS),
