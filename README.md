@@ -7,9 +7,12 @@ Python utility for finding and downloading documents from websites with Playwrig
 - crawls start URLs from a YAML config
 - renders pages in Chromium and analyzes the post-JavaScript DOM
 - downloads direct document links from the page
-- clicks likely download and export controls
+- clicks multilingual document controls, tabs, accordion sections, modals, and other document-like UI controls
 - captures document-like browser network responses, including XHR and fetch scenarios
 - rescans the DOM after relevant clicks to find links that appear dynamically
+- prioritizes likely product, catalog, resource, and document-rich pages instead of plain BFS
+- opens alternate language variants only for relevant document-rich pages and with a hard limit
+- uses fallback download strategies when a direct request is not enough
 - rejects HTML error pages and oversized responses
 - deduplicates by URL, checksum, and filename
 - stores downloads in one folder or in per-domain subfolders
@@ -153,9 +156,20 @@ Main options:
 - `max_file_size_mb` - maximum accepted file size in MB
 - `group_by_domain` - when `true`, save files into `download_directory/<domain>/`
 - `max_clicks_per_page` - maximum relevant download-like clicks per page
+- `max_document_controls_per_page` - base limit for multilingual document-related UI controls per page
+- `max_language_variants_per_page` - cap for alternate language versions of the same relevant page
+- `document_page_bonus_clicks` - extra clicks allowed on detected document-rich pages
+- `document_page_bonus_depth` - extra crawl depth allowed below detected document-rich pages
+- `max_links_enqueued_per_page` - cap for prioritized internal links added from one page
 - `save_state_every_n_files` - buffered state persistence threshold; `null` disables periodic flush and keeps end-of-page/domain/run saves
 - `network_capture_enabled` - enable saving document-like browser network responses
 - `post_click_rescan` - rescan DOM and internal links after a relevant click
+- `document_keywords` - multilingual document-control keywords used for controls, sections, scoring, and prioritization
+- `section_keywords` - multilingual section/header hints for document-rich areas
+- `positive_url_patterns` - URL fragments that raise queue priority
+- `negative_url_patterns` - URL fragments that lower priority or exclude pages
+- `language_switcher_hints` - hints for detecting alternate language variants
+- `product_page_hints` - hints for identifying product or catalog detail pages
 
 Example:
 
@@ -183,6 +197,11 @@ log_file: ./logs/downloader.log
 max_file_size_mb: 100
 group_by_domain: true
 max_clicks_per_page: 25
+max_document_controls_per_page: 25
+max_language_variants_per_page: 2
+document_page_bonus_clicks: 8
+document_page_bonus_depth: 1
+max_links_enqueued_per_page: 40
 save_state_every_n_files: 20
 network_capture_enabled: true
 post_click_rescan: true
@@ -193,16 +212,38 @@ urls:
 
 ## Detection logic
 
-The crawler now finds documents from three main sources:
+The crawler now finds documents from four main sources:
 
 1. `dom_link`
    Direct links found in `href`, `src`, `data-*`, inline handlers, and other DOM text.
 
 2. `click_download`
-   Browser downloads triggered by clicking download-like controls such as `Download`, `Export`, `PDF`, `Excel`, `Скачать`, `Экспорт`.
+   Browser downloads triggered by clicking multilingual document controls, tabs, accordion sections, summaries, and other document-like UI controls.
 
 3. `network_response`
    Browser responses intercepted while the page is loading or reacting to user actions. This covers many JavaScript-driven download flows, including XHR and fetch responses that return documents without exposing a direct link in the DOM.
+
+4. `page_context`
+   Same-context browser navigation for document URLs that reject plain direct requests and need cookies, referer, or session state.
+
+## Crawl prioritization
+
+The crawler no longer treats the site as a plain FIFO queue.
+
+It scores and prioritizes pages using signals such as:
+
+- multilingual document keywords in URL, title, anchor text, headings, and section text
+- product-page hints
+- document-rich sections like `Documents`, `Brochures`, `Certificates`, `Kataloglar`, `Belgeleri`, `Документы`
+- repeated document links or repeated document-related controls
+
+It de-prioritizes or rejects links such as:
+
+- login, register, privacy, cookie, cart, account
+- obvious social links and non-content utility links
+- language switchers as generic crawl targets
+
+Language variants are opened only for document-rich pages and only up to `max_language_variants_per_page`.
 
 ## Response validation
 
@@ -227,8 +268,13 @@ Common rejection reasons in the log:
 - `rejected_empty_body`
 - `rejected_size_limit`
 - `rejected_content_type`
+- `not_document_like`
 - `http_status_403`
 - `http_status_404`
+- `download_strategy_failed_direct`
+- `download_strategy_failed_page_context`
+- `download_strategy_failed_browser`
+- `download_strategy_failed_network_capture`
 
 ## Logging
 
@@ -236,14 +282,17 @@ The crawler writes regular logs plus structured document events in a predictable
 
 - `page_url`
 - `document_url`
+- `internal_id`
 - `filename`
 - `discovery_method`
+- `language_context`
+- `download_strategy`
 - `result`
 - `reason`
 - `content_type`
 - `size`
 
-This makes it easier to understand why a file was saved, skipped, or rejected.
+The crawler also writes queue events for crawl prioritization decisions, including score, depth, reason, and whether a URL was queued or rejected.
 
 ## State persistence
 
@@ -278,4 +327,3 @@ When `group_by_domain: false`, the previous flat directory behavior is used.
 - Browser network interception helps with many JavaScript-driven downloads, but not every blob-based flow exposes a reusable response body.
 - Very dynamic sites can still hide documents behind custom UI states that are not reachable through safe generic clicks.
 - The crawler intentionally avoids aggressive URL normalization and does not remove query parameters, because signed URLs often depend on them.
-Build trigger

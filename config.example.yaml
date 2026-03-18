@@ -21,9 +21,57 @@ log_file: ./logs/downloader.log
 max_file_size_mb: 100
 group_by_domain: true
 max_clicks_per_page: 25
+max_document_controls_per_page: 25
+max_language_variants_per_page: 2
+document_page_bonus_clicks: 8
+document_page_bonus_depth: 1
+max_links_enqueued_per_page: 40
 save_state_every_n_files: 20
 network_capture_enabled: true
 post_click_rescan: true
+
+# Optional overrides. Defaults are already multilingual and platform-oriented,
+# so these lists may be omitted unless you want to tune priorities.
+# document_keywords:
+#   - download
+#   - brochure
+#   - datasheet
+#   - indir
+#   - broşür
+#   - katalog
+#   - скачать
+#   - сертификат
+# section_keywords:
+#   - documents
+#   - downloads
+#   - kataloglar
+#   - kalite belgeleri
+#   - документы
+# positive_url_patterns:
+#   - product
+#   - catalog
+#   - document
+#   - download
+#   - brochure
+#   - sertifika
+# negative_url_patterns:
+#   - login
+#   - register
+#   - privacy
+#   - cookie
+#   - cart
+# language_switcher_hints:
+#   - language
+#   - hreflang
+#   - dil
+#   - türkçe
+#   - русский
+# product_page_hints:
+#   - product
+#   - model
+#   - catalog
+#   - ürün
+#   - модель
 
 urls:
   - https://example.com
