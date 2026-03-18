@@ -13,6 +13,7 @@ Python utility for finding and downloading documents from websites with Playwrig
 - prioritizes likely product, catalog, resource, and document-rich pages instead of plain BFS
 - opens alternate language variants only for relevant document-rich pages and with a hard limit
 - uses fallback download strategies when a direct request is not enough
+- in `documents_only` mode saves only real document-like files and drops HTML, images, scripts, styles, fonts, and other web assets
 - rejects HTML error pages and oversized responses
 - deduplicates by URL, checksum, and filename
 - stores downloads in one folder or in per-domain subfolders
@@ -149,7 +150,10 @@ Main options:
 - `max_depth` - crawl depth for internal pages
 - `max_pages_per_domain` - page limit per domain
 - `follow_subdomains` - allow subdomain traversal
+- `documents_only` - strict mode that allows exploration but saves only real document-like files
 - `allowed_extensions` - file extensions treated as documents
+- `blocked_extensions` - denylist for images, scripts, styles, fonts, media, and other web assets
+- `blocked_content_types` - denylist for HTML and generic web asset MIME types
 - `download_directory` - target directory for downloaded files
 - `state_file` - JSON state file for deduplication
 - `log_file` - crawler log path
@@ -180,6 +184,7 @@ wait_until: networkidle
 max_depth: 2
 max_pages_per_domain: 50
 follow_subdomains: false
+documents_only: true
 
 allowed_extensions:
   - .pdf
@@ -189,6 +194,33 @@ allowed_extensions:
   - .doc
   - .docx
   - .zip
+
+blocked_extensions:
+  - .jpg
+  - .jpeg
+  - .png
+  - .webp
+  - .gif
+  - .svg
+  - .ico
+  - .js
+  - .css
+  - .map
+  - .woff
+  - .woff2
+  - .ttf
+  - .mp3
+  - .mp4
+
+blocked_content_types:
+  - text/html
+  - image/
+  - text/css
+  - application/javascript
+  - text/javascript
+  - font/
+  - audio/
+  - video/
 
 download_directory: ./downloads
 state_file: ./state/download-state.json
@@ -201,7 +233,7 @@ max_document_controls_per_page: 25
 max_language_variants_per_page: 2
 document_page_bonus_clicks: 8
 document_page_bonus_depth: 1
-max_links_enqueued_per_page: 40
+max_links_enqueued_per_page: 20
 save_state_every_n_files: 20
 network_capture_enabled: true
 post_click_rescan: true
@@ -240,6 +272,7 @@ It scores and prioritizes pages using signals such as:
 It de-prioritizes or rejects links such as:
 
 - login, register, privacy, cookie, cart, account
+- `/producttags/`, `/tags/`, `/news`, `/blog`, `/contact`, `/search`
 - obvious social links and non-content utility links
 - language switchers as generic crawl targets
 
@@ -264,6 +297,12 @@ The crawler rejects responses such as:
 
 Common rejection reasons in the log:
 
+- `blocked_extension`
+- `blocked_content_type`
+- `blocked_negative_url_pattern`
+- `skipped_non_document_asset`
+- `skipped_navigation_page`
+- `skipped_tag_page`
 - `rejected_html_response`
 - `rejected_empty_body`
 - `rejected_size_limit`

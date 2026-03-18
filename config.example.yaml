@@ -4,6 +4,7 @@ wait_until: networkidle
 max_depth: 2
 max_pages_per_domain: 50
 follow_subdomains: false
+documents_only: true
 
 allowed_extensions:
   - .pdf
@@ -13,6 +14,33 @@ allowed_extensions:
   - .doc
   - .docx
   - .zip
+
+blocked_extensions:
+  - .jpg
+  - .jpeg
+  - .png
+  - .webp
+  - .gif
+  - .svg
+  - .ico
+  - .js
+  - .css
+  - .map
+  - .woff
+  - .woff2
+  - .ttf
+  - .mp3
+  - .mp4
+
+blocked_content_types:
+  - text/html
+  - image/
+  - text/css
+  - application/javascript
+  - text/javascript
+  - font/
+  - audio/
+  - video/
 
 download_directory: ./downloads
 state_file: ./state/download-state.json
@@ -25,7 +53,7 @@ max_document_controls_per_page: 25
 max_language_variants_per_page: 2
 document_page_bonus_clicks: 8
 document_page_bonus_depth: 1
-max_links_enqueued_per_page: 40
+max_links_enqueued_per_page: 20
 save_state_every_n_files: 20
 network_capture_enabled: true
 post_click_rescan: true
@@ -60,6 +88,11 @@ post_click_rescan: true
 #   - privacy
 #   - cookie
 #   - cart
+#   - /producttags/
+#   - /tags/
+#   - /news
+#   - /blog
+#   - /contact
 # language_switcher_hints:
 #   - language
 #   - hreflang
